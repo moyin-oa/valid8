@@ -5,6 +5,12 @@ from reportlab.pdfgen import canvas
 
 from app.schemas.pdf import PdfExportRequest, PdfExportResponse
 
+PDF_OUT_DIR = Path("/tmp/med-doc-pdfs")
+
+
+def get_pdf_path(document_id: str) -> Path:
+    return PDF_OUT_DIR / f"{document_id}.pdf"
+
 
 def _draw_wrapped_text(pdf: canvas.Canvas, text: str, start_x: int, start_y: int, width_chars: int = 90) -> int:
     y = start_y
@@ -25,9 +31,8 @@ def _draw_wrapped_text(pdf: canvas.Canvas, text: str, start_x: int, start_y: int
 
 
 def export_pdf(payload: PdfExportRequest) -> PdfExportResponse:
-    out_dir = Path("/tmp/med-doc-pdfs")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    output_path = out_dir / f"{payload.documentId}.pdf"
+    PDF_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = get_pdf_path(payload.documentId)
 
     pdf = canvas.Canvas(str(output_path), pagesize=letter)
     width, height = letter
@@ -69,4 +74,8 @@ def export_pdf(payload: PdfExportRequest) -> PdfExportResponse:
         pdf.drawString(50, y, "- None")
 
     pdf.save()
-    return PdfExportResponse(documentId=payload.documentId, downloadPath=str(output_path))
+    return PdfExportResponse(
+        documentId=payload.documentId,
+        downloadPath=str(output_path),
+        downloadUrl=f"/api/pdf/download/{payload.documentId}",
+    )

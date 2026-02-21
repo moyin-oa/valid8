@@ -36,6 +36,7 @@ uvicorn app.main:app --reload --port 8000
 - `POST /api/interactions/check`
 - `POST /api/pipeline/process`
 - `POST /api/pdf/export`
+- `GET /api/pdf/download/{documentId}`
 - `POST /api/tts/text`
 
 ## Notes

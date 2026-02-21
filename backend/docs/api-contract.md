@@ -90,8 +90,15 @@ Generates summary PDF on server.
 
 ### Response
 ```json
-{ "documentId": "doc-001", "downloadPath": "/tmp/med-doc-pdfs/doc-001.pdf" }
+{
+  "documentId": "doc-001",
+  "downloadPath": "/tmp/med-doc-pdfs/doc-001.pdf",
+  "downloadUrl": "/api/pdf/download/doc-001"
+}
 ```
+
+## GET `/api/pdf/download/{documentId}`
+Downloads the generated PDF for a given document.
 
 ## POST `/api/tts/text`
 Returns text for frontend Web Speech playback.
@@ -112,3 +119,31 @@ Returns text for frontend Web Speech playback.
   "text": "Plain language summary\\nAction items:\\n1. Follow up with PCP"
 }
 ```
+
+## POST `/api/tts/audio`
+Generates MP3 audio using ElevenLabs.
+
+### Request
+```json
+{
+  "documentId": "doc-001",
+  "text": "Plain language summary",
+  "voiceId": "optional-voice-id",
+  "modelId": "optional-model-id",
+  "stability": 0.5,
+  "similarityBoost": 0.75
+}
+```
+
+### Response
+```json
+{
+  "documentId": "doc-001",
+  "provider": "elevenlabs",
+  "audioPath": "/tmp/med-doc-tts/doc-001.mp3",
+  "audioUrl": "/api/tts/download/doc-001"
+}
+```
+
+## GET `/api/tts/download/{documentId}`
+Downloads generated MP3 audio for the document.

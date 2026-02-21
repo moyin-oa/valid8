@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from itertools import combinations
 
 import httpx
@@ -40,29 +41,73 @@ class InteractionService:
         cleaned = [m.strip().lower() for m in medications if m and m.strip()]
         return sorted(set(cleaned))
 
-    async def _check_pair_openfda(self, drug_a: str, drug_b: str) -> InteractionWarning | None:
+    async def _check_pair_openfda(
+        self,
+        client: httpx.AsyncClient,
+        drug_a: str,
+        drug_b: str,
+    ) -> tuple[InteractionWarning | None, str | None]:
         search = f'openfda.generic_name:"{drug_a}"+AND+openfda.generic_name:"{drug_b}"'
         url = f"{settings.openfda_base_url}/drug/label.json"
         params = {"search": search, "limit": 1}
 
         try:
-            async with httpx.AsyncClient(timeout=settings.openfda_timeout_seconds) as client:
-                response = await client.get(url, params=params)
-                if response.status_code == 200:
-                    total = response.json().get("meta", {}).get("results", {}).get("total", 0)
-                    if total and total > 0:
-                        return InteractionWarning(
+            response = await client.get(url, params=params)
+            if response.status_code == 200:
+                total = response.json().get("meta", {}).get("results", {}).get("total", 0)
+                if total and total > 0:
+                    return (
+                        InteractionWarning(
                             drugA=drug_a,
                             drugB=drug_b,
                             severity="medium",
                             warning="Potential interaction signal found in FDA label metadata.",
                             evidence="OpenFDA label query match.",
                             source="https://open.fda.gov/apis/drug/label/",
-                        )
+                        ),
+                        None,
+                    )
+                return None, None
+
+            if response.status_code == 429:
+                await asyncio.sleep(settings.openfda_rate_limit_backoff_seconds)
+                return None, "OpenFDA rate-limited one or more pair lookups."
+
+            return None, f"OpenFDA returned HTTP {response.status_code} for one or more pair lookups."
+        except httpx.TimeoutException:
+            return None, "OpenFDA timeout for one or more pair lookups."
         except Exception as exc:
             logger.warning("OpenFDA query failed for %s/%s: %s", drug_a, drug_b, exc)
+            return None, "OpenFDA unavailable for one or more pair lookups."
 
-        return None
+    async def _process_pair(
+        self,
+        client: httpx.AsyncClient,
+        semaphore: asyncio.Semaphore,
+        drug_a: str,
+        drug_b: str,
+    ) -> tuple[InteractionWarning | None, str | None, bool]:
+        pair_key = "|".join(sorted((drug_a, drug_b)))
+        pair_tuple = tuple(sorted((drug_a, drug_b)))
+
+        known = KNOWN_INTERACTIONS.get(pair_tuple)
+        if known:
+            await self._cache_set_safe(pair_key, known.model_dump())
+            return known, None, False
+
+        cached = await self._cache_get_safe(pair_key)
+        if cached and cached.get("result"):
+            return InteractionWarning(**cached["result"]), None, False
+
+        async with semaphore:
+            warning, note = await self._check_pair_openfda(client, drug_a, drug_b)
+
+        if warning:
+            await self._cache_set_safe(pair_key, warning.model_dump())
+            return warning, note, False
+
+        await self._cache_set_safe(pair_key, {})
+        return None, note, True
 
     async def _cache_get_safe(self, pair_key: str) -> dict | None:
         if not self.cache_available:
@@ -85,39 +130,39 @@ class InteractionService:
 
     async def check_interactions(self, medications: list[str]) -> InteractionCheckResponse:
         meds = self.normalize_meds(medications)
+        if len(meds) < 2:
+            return InteractionCheckResponse(
+                normalizedMedications=meds,
+                interactions=[],
+                status="ok",
+                notes=[],
+            )
+
         interactions: list[InteractionWarning] = []
-        notes: list[str] = []
+        notes: set[str] = set()
         partial = False
+        semaphore = asyncio.Semaphore(max(1, settings.openfda_max_concurrency))
+        tasks = []
+        async with httpx.AsyncClient(timeout=settings.openfda_timeout_seconds) as client:
+            for drug_a, drug_b in combinations(meds, 2):
+                tasks.append(self._process_pair(client, semaphore, drug_a, drug_b))
 
-        for drug_a, drug_b in combinations(meds, 2):
-            pair_key = "|".join(sorted((drug_a, drug_b)))
-            pair_tuple = tuple(sorted((drug_a, drug_b)))
+            results = await asyncio.gather(*tasks)
 
-            known = KNOWN_INTERACTIONS.get(pair_tuple)
-            if known:
-                interactions.append(known)
-                await self._cache_set_safe(pair_key, known.model_dump())
-                continue
-
-            cached = await self._cache_get_safe(pair_key)
-            if cached and cached.get("result"):
-                interactions.append(InteractionWarning(**cached["result"]))
-                continue
-
-            openfda_warning = await self._check_pair_openfda(drug_a, drug_b)
-            if openfda_warning:
-                interactions.append(openfda_warning)
-                await self._cache_set_safe(pair_key, openfda_warning.model_dump())
-            else:
-                await self._cache_set_safe(pair_key, {})
+        for warning, note, mark_partial in results:
+            if warning:
+                interactions.append(warning)
+            if note:
+                notes.add(note)
+            if mark_partial:
                 partial = True
 
         if partial:
-            notes.append("Some medication pairs returned no explicit interaction signal from current sources.")
+            notes.add("Some medication pairs returned no explicit interaction signal from current sources.")
 
         return InteractionCheckResponse(
             normalizedMedications=meds,
             interactions=interactions,
             status="partial" if partial else "ok",
-            notes=notes,
+            notes=sorted(notes),
         )

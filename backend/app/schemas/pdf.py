@@ -14,3 +14,4 @@ class PdfExportRequest(BaseModel):
 class PdfExportResponse(BaseModel):
     documentId: str
     downloadPath: str
+    downloadUrl: str

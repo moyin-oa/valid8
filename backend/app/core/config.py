@@ -14,9 +14,17 @@ class Settings(BaseSettings):
 
     openfda_base_url: str = "https://api.fda.gov"
     openfda_timeout_seconds: float = 4.0
+    openfda_max_concurrency: int = 4
+    openfda_rate_limit_backoff_seconds: float = 1.0
     external_api_timeout_seconds: float = 4.0
 
     interaction_cache_ttl_hours: int = 24
+
+    elevenlabs_api_key: str | None = None
+    elevenlabs_base_url: str = "https://api.elevenlabs.io/v1"
+    elevenlabs_voice_id: str = "EXAVITQu4vr4xnSDxMaL"
+    elevenlabs_model_id: str = "eleven_multilingual_v2"
+    elevenlabs_timeout_seconds: float = 12.0
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
