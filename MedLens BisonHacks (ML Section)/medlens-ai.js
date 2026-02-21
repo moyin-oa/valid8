@@ -39,6 +39,7 @@ Given the following medical document text, return a JSON object with:
 4. "action_items": An array of strings — specific things the patient needs to do (appointments, medications, lifestyle changes, follow-ups)
 5. "dates": An array of objects with "event" and "date" fields for any important dates mentioned
 6. "warnings": An array of strings — any critical warnings or red flags in the document
+7. "disclaimer": Always include this exact string: "This summary is for informational purposes only and is not a substitute for professional medical advice. Always consult your healthcare provider with questions about your care."
 
 If the document does not appear to be a medical document, return:
 {"error": "not_medical", "message": "This does not appear to be a medical document."}
@@ -188,15 +189,15 @@ async function processDocument(rawText, readingLevel = 'simple') {
 
   const prompt = buildPrompt(rawText, readingLevel);
 
-  // Try OpenAI first, then Gemini (Gemini quota may be exhausted)
-  const openaiKey = getOpenAIKey();
-  if (openaiKey) {
-    return await callOpenAI(prompt, openaiKey);
-  }
-
+  // Try Gemini first, then OpenAI
   const geminiKey = getGeminiKey();
   if (geminiKey) {
     return await callGemini(prompt, geminiKey);
+  }
+
+  const openaiKey = getOpenAIKey();
+  if (openaiKey) {
+    return await callOpenAI(prompt, openaiKey);
   }
 
   throw new Error('No API key found. Set GEMINI_API_KEY or OPENAI_API_KEY.');
@@ -208,6 +209,7 @@ async function processDocument(rawText, readingLevel = 'simple') {
 async function analyzeMedicalDocument(input, readingLevel = 'simple') {
   let rawText;
   let ocrConfidence = null;
+  let ocrWarning = null;
 
   if (typeof input === 'string') {
     rawText = input;
@@ -216,6 +218,13 @@ async function analyzeMedicalDocument(input, readingLevel = 'simple') {
     const ocrResult = await extractText(input);
     rawText = ocrResult.text;
     ocrConfidence = ocrResult.confidence;
+
+    // Flag low-confidence OCR so the UI can warn the user
+    if (ocrConfidence !== null && ocrConfidence < 60) {
+      ocrWarning = 'We had trouble reading this document clearly. For best results, try a clearer photo or type the text directly.';
+    } else if (ocrConfidence !== null && ocrConfidence < 80) {
+      ocrWarning = 'Some parts of this document were difficult to read. Please verify the information below.';
+    }
   }
 
   if (!rawText || rawText.trim().length === 0) {
@@ -227,6 +236,7 @@ async function analyzeMedicalDocument(input, readingLevel = 'simple') {
   return {
     rawText,
     ocrConfidence,
+    ocrWarning,
     readingLevel,
     ...analysis
   };
