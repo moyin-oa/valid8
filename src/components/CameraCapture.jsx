@@ -50,6 +50,20 @@ export default function CameraCapture({ onCapture, onClose }) {
         }
     };
 
+    const handleClose = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => {
+                track.stop();
+                streamRef.current.removeTrack(track);
+            });
+            streamRef.current = null;
+        }
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+        onClose();
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -59,7 +73,7 @@ export default function CameraCapture({ onCapture, onClose }) {
         >
             <div className="absolute top-4 right-4 z-[110]">
                 <button
-                    onClick={onClose}
+                    onClick={handleClose}
                     className="p-3 bg-gray-900/60 text-white rounded-full hover:bg-gray-800 transition-colors focus:ring-2 focus:ring-white"
                     aria-label="Close camera"
                 >

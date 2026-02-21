@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Volume2, Download, AlertTriangle, CheckSquare, FileText, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Volume2, Download, AlertTriangle, CheckSquare, FileText, ChevronDown, Pill } from 'lucide-react';
+import mockData from '../data/mock_contract.json';
+import { useReactToPrint } from 'react-to-print';
 
 export default function ResultsPage() {
     const navigate = useNavigate();
@@ -9,10 +11,13 @@ export default function ResultsPage() {
     const [readingLevel, setReadingLevel] = useState('standard');
     const [isPlaying, setIsPlaying] = useState(false);
 
+    // Reference for the PDF print area
+    const contentRef = useRef(null);
+
     const tabs = [
         { id: 'summary', label: 'Summary', icon: FileText },
         { id: 'actions', label: 'Action Items', icon: CheckSquare },
-        { id: 'alerts', label: 'Alerts (1)', icon: AlertTriangle },
+        { id: 'alerts', label: `Alerts (${mockData.warnings.length})`, icon: AlertTriangle },
     ];
 
     const handleLevelChange = (e) => setReadingLevel(e.target.value);
@@ -26,17 +31,11 @@ export default function ResultsPage() {
 
         let textToRead = "";
         if (activeTab === 'summary') {
-            if (readingLevel === 'simple') {
-                textToRead = "You went to the hospital today because your chest hurt and it was hard to breathe. The doctor thinks this was caused by heartburn, not your heart. Your heart tests were perfectly fine. You can go home now, but please see your regular doctor next week to make sure everything is okay.";
-            } else if (readingLevel === 'standard') {
-                textToRead = "You visited the emergency room today for chest pain and shortness of breath. The doctor believes this was caused by acid reflux, not your heart. Your heart tests (EKG and blood work) were completely normal. You are safe to go home, but you need to follow up with your primary doctor next week.";
-            } else if (readingLevel === 'detailed') {
-                textToRead = "Patient presented to the ED with complaints of chest pain and dyspnea. Initial evaluation suggests gastroesophageal reflux disease (GERD) rather than a cardiac event. Cardiac workup, including ECG and troponin levels, was unremarkable. Patient is stable for discharge with instructions to follow up with their primary care physician within 7 days for further evaluation and management of suspected GERD.";
-            }
+            textToRead = mockData.summary[readingLevel];
         } else if (activeTab === 'actions') {
-            textToRead = "Your Next Steps. 1: Schedule a follow-up with Dr. Smith within 7 days. 2: Take Omeprazole 20 milligrams once every morning 30 minutes before eating. 3: Avoid spicy foods and eating within 3 hours of bedtime. 4: Return to the ER right away if the chest pain comes back, gets worse, or moves to your arm or jaw.";
+            textToRead = "Your Next Steps. " + mockData.action_items.map((item, i) => `${i + 1}: ${item}`).join(". ");
         } else if (activeTab === 'alerts') {
-            textToRead = "Safety Checks. Potential Interaction: We noticed you are taking Clopidogrel, also known as Plavix. Your new prescription, Omeprazole, can sometimes make Clopidogrel less effective. Action: Call your primary doctor or pharmacist tomorrow to check if you should use a different stomach medicine. Dosage Check Passed: Your prescribed dosages look standard and safe.";
+            textToRead = "Safety Checks and Warnings. " + mockData.warnings.join(". ");
         }
 
         const utterance = new SpeechSynthesisUtterance(textToRead);
@@ -73,37 +72,14 @@ export default function ResultsPage() {
         window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
     }
 
-    const handleDownloadPdf = async () => {
-        try {
-            // Import html2pdf dynamically
-            const html2pdfModule = await import('html2pdf.js');
-            const html2pdf = html2pdfModule.default || html2pdfModule;
-
-            // Grab the content area
-            const element = document.getElementById('pdf-content-area');
-            if (!element) return;
-
-            const opt = {
-                margin: 10,
-                filename: 'MedLens_Summary.pdf',
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            };
-
-            // Add a temporary class to format it nicely for PDF
-            element.classList.add('pdf-mode');
-
-            // Wait for generation to save
-            await html2pdf().set(opt).from(element).save();
-
-            // Cleanup
-            element.classList.remove('pdf-mode');
-        } catch (error) {
-            console.error("Error generating PDF:", error);
-            alert("Sorry, there was an issue generating the PDF. Please try again.");
-        }
-    };
+    // Set up native printing for PDF generation
+    const handleDownloadPdf = useReactToPrint({
+        content: () => contentRef.current,
+        documentTitle: 'MedLens_Summary',
+        onBeforePrint: () => console.log('Preparing PDF format...'),
+        onAfterPrint: () => console.log('Finished PDF printing.'),
+        removeAfterPrint: true,
+    });
 
     return (
         <div className="w-full pb-20">
@@ -141,7 +117,12 @@ export default function ResultsPage() {
             </div>
 
             {/* Tabs */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-6" id="pdf-content-area">
+            <div
+                ref={contentRef}
+                className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-6"
+                id="pdf-content-area"
+                style={{ "@media print": { margin: 0, border: 'none', boxShadow: 'none' } }}
+            >
                 <div className="flex border-b border-gray-200" role="tablist">
                     {tabs.map((tab) => (
                         <button
@@ -179,10 +160,10 @@ export default function ResultsPage() {
                             transition={{ duration: 0.2 }}
                         >
                             {activeTab === 'summary' && (
-                                <SummaryTab readingLevel={readingLevel} onLevelChange={handleLevelChange} />
+                                <SummaryTab data={mockData} readingLevel={readingLevel} onLevelChange={handleLevelChange} />
                             )}
-                            {activeTab === 'actions' && <ActionsTab />}
-                            {activeTab === 'alerts' && <AlertsTab />}
+                            {activeTab === 'actions' && <ActionsTab data={mockData} />}
+                            {activeTab === 'alerts' && <AlertsTab data={mockData} />}
                         </motion.div>
                     </AnimatePresence>
                 </div>
@@ -191,39 +172,10 @@ export default function ResultsPage() {
     );
 }
 
-function SummaryTab({ readingLevel, onLevelChange }) {
-    const summaries = {
-        simple: (
-            <>
-                <p className="text-lg leading-relaxed mb-4">
-                    You went to the hospital today because your chest hurt and it was hard to breathe. The doctor thinks this was caused by heartburn, not your heart.
-                </p>
-                <p className="text-lg leading-relaxed">
-                    Your heart tests were perfectly fine. You can go home now, but please see your regular doctor next week to make sure everything is okay.
-                </p>
-            </>
-        ),
-        standard: (
-            <>
-                <p className="text-lg leading-relaxed mb-4">
-                    You visited the emergency room today for chest pain and shortness of breath. The doctor believes this was caused by acid reflux, not your heart.
-                </p>
-                <p className="text-lg leading-relaxed">
-                    Your heart tests (EKG and blood work) were completely normal. You are safe to go home, but you need to follow up with your primary doctor next week.
-                </p>
-            </>
-        ),
-        detailed: (
-            <>
-                <p className="text-lg leading-relaxed mb-4">
-                    Patient presented to the ED with complaints of chest pain and dyspnea. Initial evaluation suggests gastroesophageal reflux disease (GERD) rather than a cardiac event.
-                </p>
-                <p className="text-lg leading-relaxed">
-                    Cardiac workup, including ECG and troponin levels, was unremarkable. Patient is stable for discharge with instructions to follow up with their primary care physician within 7 days for further evaluation and management of suspected GERD.
-                </p>
-            </>
-        )
-    };
+function SummaryTab({ data, readingLevel, onLevelChange }) {
+    // Note: Since the JSON only has one 'summary' string right now, 
+    // we use that for all levels. In a real app, the API would return 
+    // different text based on the level requested.
 
     return (
         <div className="space-y-6">
@@ -245,24 +197,34 @@ function SummaryTab({ readingLevel, onLevelChange }) {
             </div>
 
             <div className="prose prose-brand max-w-none text-gray-700" aria-live="polite">
-                {summaries[readingLevel]}
+                <p className="text-lg leading-relaxed mb-4">
+                    {data.summary[readingLevel]}
+                </p>
+
+                {data.diagnoses && data.diagnoses.length > 0 && (
+                    <div className="mt-6 p-4 bg-brand-50 rounded-xl border border-brand-100">
+                        <h4 className="font-bold text-brand-900 mb-2">Diagnoses</h4>
+                        <ul className="list-disc pl-5 space-y-1">
+                            {data.diagnoses.map((diag, i) => (
+                                <li key={i} className="text-brand-800">
+                                    <span className="font-semibold">{diag.name}:</span> {diag.plain_language}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
             </div>
         </div>
     );
 }
 
-function ActionsTab() {
+function ActionsTab({ data }) {
     return (
         <div className="space-y-6">
             <h3 className="text-xl font-bold text-gray-900 border-b border-gray-100 pb-4">Your Next Steps</h3>
 
             <ul className="space-y-3">
-                {[
-                    "Schedule a follow-up with Dr. Smith within 7 days.",
-                    "Take Omeprazole (20mg) once every morning 30 minutes before eating.",
-                    "Avoid spicy foods and eating within 3 hours of bedtime.",
-                    "Return to the ER right away if the chest pain comes back, gets worse, or moves to your arm or jaw."
-                ].map((item, i) => (
+                {data.action_items.map((item, i) => (
                     <li key={i} className="flex gap-4 p-4 rounded-xl bg-gray-50 border border-gray-100 hover:border-gray-200 transition-colors">
                         <div className="mt-1 flex items-center min-h-[24px]">
                             <input type="checkbox" className="w-6 h-6 rounded border-gray-300 text-brand-600 focus:ring-4 focus:ring-brand-500/50" aria-label={`Mark as done: ${item}`} />
@@ -271,42 +233,75 @@ function ActionsTab() {
                     </li>
                 ))}
             </ul>
+
+            {data.dates && data.dates.length > 0 && (
+                <div className="mt-6 pt-6 border-t border-gray-100">
+                    <h4 className="font-bold text-gray-900 mb-3">Important Dates</h4>
+                    <div className="space-y-2">
+                        {data.dates.map((dateObj, i) => (
+                            <div key={i} className="flex justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                                <span className="font-medium text-gray-700">{dateObj.event}</span>
+                                <span className="text-brand-600 font-bold">{dateObj.date}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
 
-function AlertsTab() {
+function AlertsTab({ data }) {
     return (
         <div className="space-y-6">
             <h3 className="text-xl font-bold text-gray-900 border-b border-gray-100 pb-4">Safety Checks</h3>
 
-            <div className="p-5 bg-amber-50 border border-amber-200 rounded-xl relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-2 h-full bg-amber-500"></div>
-                <div className="flex gap-4">
-                    <div className="text-amber-500 mt-1">
-                        <AlertTriangle size={24} aria-hidden="true" />
-                    </div>
-                    <div>
-                        <h4 className="text-lg font-bold text-amber-900 mb-1">Potential Interaction</h4>
-                        <p className="text-amber-800 mb-3 text-base">
-                            We noticed you are taking <strong className="font-bold">Clopidogrel (Plavix)</strong>. Your new prescription, <strong className="font-bold">Omeprazole</strong>, can sometimes make Clopidogrel less effective.
-                        </p>
-                        <div className="bg-amber-100/50 p-4 rounded-lg text-amber-900 text-sm font-bold border border-amber-200">
-                            Action: Call your primary doctor or pharmacist tomorrow to check if you should use a different stomach medicine.
+            {data.warnings && data.warnings.length > 0 ? (
+                data.warnings.map((warning, i) => (
+                    <div key={i} className="p-5 bg-amber-50 border border-amber-200 rounded-xl relative overflow-hidden mb-4">
+                        <div className="absolute top-0 left-0 w-2 h-full bg-amber-500"></div>
+                        <div className="flex gap-4">
+                            <div className="text-amber-500 mt-1">
+                                <AlertTriangle size={24} aria-hidden="true" />
+                            </div>
+                            <div>
+                                <h4 className="text-lg font-bold text-amber-900 mb-1">Warning</h4>
+                                <p className="text-amber-800 text-base">{warning}</p>
+                            </div>
                         </div>
                     </div>
+                ))
+            ) : (
+                <div className="p-5 bg-green-50 border border-green-200 rounded-xl flex gap-4">
+                    <div className="text-green-500 mt-1">
+                        <CheckSquare size={24} aria-hidden="true" />
+                    </div>
+                    <div>
+                        <h4 className="text-lg font-bold text-green-900">No Critical Warnings</h4>
+                        <p className="text-green-800 text-base">No immediate red flags were found in this document.</p>
+                    </div>
                 </div>
-            </div>
+            )}
 
-            <div className="p-5 bg-green-50 border border-green-200 rounded-xl flex gap-4">
-                <div className="text-green-500 mt-1">
-                    <CheckSquare size={24} aria-hidden="true" />
+            {data.medications && data.medications.length > 0 && (
+                <div className="mt-8">
+                    <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <Pill size={20} className="text-brand-500" />
+                        Medications Found
+                    </h4>
+                    <div className="space-y-3">
+                        {data.medications.map((med, i) => (
+                            <div key={i} className="p-4 bg-white border border-gray-200 rounded-xl">
+                                <div className="flex justify-between items-start mb-2">
+                                    <h5 className="font-bold text-brand-700 text-lg">{med.name} {med.dosage}</h5>
+                                </div>
+                                <p className="text-gray-600 mb-1"><span className="font-medium">Take:</span> {med.frequency}</p>
+                                <p className="text-gray-600"><span className="font-medium">For:</span> {med.purpose}</p>
+                            </div>
+                        ))}
+                    </div>
                 </div>
-                <div>
-                    <h4 className="text-lg font-bold text-green-900">Dosage Check Passed</h4>
-                    <p className="text-green-800 text-base">Your prescribed dosages look standard and safe.</p>
-                </div>
-            </div>
+            )}
         </div>
     );
 }

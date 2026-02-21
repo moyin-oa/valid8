@@ -1,175 +1,326 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, FileUp, Type, X, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Camera, FileUp, Type, X, FileText, CheckCircle2, ShieldAlert, ArrowRight, ShieldCheck, PlayCircle } from 'lucide-react';
 import CameraCapture from '../components/CameraCapture';
 
 export default function LandingPage() {
     const navigate = useNavigate();
+    const [activeModal, setActiveModal] = useState(null); // 'camera', 'upload', 'paste'
+    const [pastedText, setPastedText] = useState('');
     const fileInputRef = useRef(null);
 
-    const [showCamera, setShowCamera] = useState(false);
-    const [showTextPaste, setShowTextPaste] = useState(false);
-    const [pastedText, setPastedText] = useState('');
-
-    const handleProcess = (data, type) => {
-        navigate('/processing', { state: { inputData: data, inputType: type } });
+    // --- Handlers ---
+    const handleCameraCapture = (imageBlob) => {
+        closeModal();
+        navigate('/processing');
     };
 
-    const handleFileUpload = (e) => {
+    const handleFileUploadClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = (e) => {
         const file = e.target.files?.[0];
         if (file) {
-            const imageUrl = URL.createObjectURL(file);
-            handleProcess(imageUrl, 'upload');
+            navigate('/processing');
         }
-        // reset input so the same file can be selected again if needed
-        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const handleTextSubmit = () => {
-        if (pastedText.trim()) {
-            handleProcess(pastedText, 'paste');
+    const handlePasteSubmit = (e) => {
+        e.preventDefault();
+        if (pastedText.trim().length > 10) {
+            closeModal();
+            navigate('/processing');
         }
     };
+
+    const handleTryDemo = () => {
+        navigate('/processing'); // Using processing to simulate the flow
+    };
+
+    const closeModal = () => {
+        setActiveModal(null);
+        setPastedText('');
+    };
+
+    // Manage body scroll based on modal state
+    useEffect(() => {
+        if (activeModal) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'auto';
+        }
+        return () => {
+            document.body.style.overflow = 'auto';
+        };
+    }, [activeModal]);
+
+    // --- Data ---
+    const valueChips = [
+        { icon: FileText, label: "Plain-language summary" },
+        { icon: CheckCircle2, label: "Action items" },
+        { icon: ShieldAlert, label: "Safety alerts" },
+    ];
+
+    const steps = [
+        { num: 1, label: "Upload or scan" },
+        { num: 2, label: "AI simplifies it" },
+        { num: 3, label: "Read with confidence" },
+    ];
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-[80vh] pt-4 px-4 overflow-hidden">
+        <div className="min-h-screen bg-gray-50 overflow-x-hidden pt-8 pb-20">
+            {/* Hidden File Input */}
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                accept="image/*,.pdf"
+                aria-label="Upload medical document"
+            />
 
-            {/* Full Screen Camera View */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <main className="lg:grid lg:grid-cols-12 lg:gap-16 xl:gap-24 items-center">
+
+                    {/* LEFT COLUMN: Hero Text & Input Cards */}
+                    <div className="lg:col-span-6 xl:col-span-5 pt-8 lg:pt-0 pb-12 lg:pb-0 z-10">
+                        {/* Eyebrow & Headline */}
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+                            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 tracking-tight leading-tight mb-6">
+                                Medical documents, <br className="hidden sm:block" />
+                                <span className="text-brand-600">simplified instantly.</span>
+                            </h1>
+                            <p className="text-lg sm:text-xl text-gray-600 mb-8 leading-relaxed max-w-2xl">
+                                Snap a photo of your discharge papers, test results, or prescriptions to get a clear summary, next steps, and safety checks.
+                            </p>
+                        </motion.div>
+
+                        {/* Value Chips */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
+                            className="flex flex-wrap gap-3 mb-10"
+                        >
+                            {valueChips.map((chip, idx) => (
+                                <div key={idx} className="flex items-center gap-2 bg-brand-50 border border-brand-100 text-brand-700 px-3 py-1.5 rounded-full text-sm font-medium">
+                                    <chip.icon size={16} className="text-brand-500" />
+                                    {chip.label}
+                                </div>
+                            ))}
+                        </motion.div>
+
+                        {/* Interactive Cards */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}
+                            className="space-y-4 mb-8"
+                        >
+                            {/* Card 1: Camera */}
+                            <button
+                                onClick={() => setActiveModal('camera')}
+                                className="w-full group relative bg-white border border-gray-200 rounded-2xl p-5 hover:border-brand-500 hover:shadow-md hover:shadow-brand-500/10 transition-all text-left focus:outline-none focus:ring-4 focus:ring-brand-500/50"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center group-hover:bg-brand-600 group-hover:text-white transition-colors">
+                                        <Camera size={24} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="text-lg font-bold text-gray-900 mb-1">Scan with camera</h3>
+                                        <p className="text-sm text-gray-500 line-clamp-1">Take a clear photo of your document</p>
+                                    </div>
+                                    <ArrowRight size={20} className="text-gray-300 group-hover:text-brand-500 transition-colors transform group-hover:translate-x-1" />
+                                </div>
+                            </button>
+
+                            {/* Card 2: Upload */}
+                            <button
+                                onClick={handleFileUploadClick}
+                                className="w-full group relative bg-white border border-gray-200 rounded-2xl p-5 hover:border-brand-500 hover:shadow-md hover:shadow-brand-500/10 transition-all text-left focus:outline-none focus:ring-4 focus:ring-brand-500/50"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center group-hover:bg-violet-600 group-hover:text-white transition-colors">
+                                        <FileUp size={24} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="text-lg font-bold text-gray-900 mb-1">Upload file</h3>
+                                        <p className="text-sm text-gray-500 line-clamp-1">PDFs or images (drag & drop support)</p>
+                                    </div>
+                                    <ArrowRight size={20} className="text-gray-300 group-hover:text-violet-500 transition-colors transform group-hover:translate-x-1" />
+                                </div>
+                            </button>
+
+                            {/* Card 3: Paste */}
+                            <button
+                                onClick={() => setActiveModal('paste')}
+                                className="w-full group relative bg-white border border-gray-200 rounded-2xl p-5 hover:border-brand-500 hover:shadow-md hover:shadow-brand-500/10 transition-all text-left focus:outline-none focus:ring-4 focus:ring-brand-500/50"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                                        <Type size={24} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="text-lg font-bold text-gray-900 mb-1">Paste text</h3>
+                                        <p className="text-sm text-gray-500 line-clamp-1">Copy and paste text from your portal</p>
+                                    </div>
+                                    <ArrowRight size={20} className="text-gray-300 group-hover:text-emerald-500 transition-colors transform group-hover:translate-x-1" />
+                                </div>
+                            </button>
+                        </motion.div>
+
+                        {/* Privacy & Demo */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4 border-t border-gray-200"
+                        >
+                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                                <ShieldCheck size={16} className="text-green-600 shrink-0" />
+                                <span>We only use your text to generate results.</span>
+                            </div>
+
+                            <button
+                                onClick={handleTryDemo}
+                                className="inline-flex items-center gap-2 text-sm font-bold text-brand-600 hover:text-brand-800 transition-colors group"
+                            >
+                                <PlayCircle size={18} className="group-hover:scale-110 transition-transform" />
+                                Try sample demo
+                            </button>
+                        </motion.div>
+
+                        {/* Stepper (Desktop logic flow view) */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}
+                            className="mt-10 hidden sm:flex items-center justify-between relative max-w-sm"
+                        >
+                            <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-gray-200 -z-10 -translate-y-1/2 rounded-full"></div>
+                            {steps.map((step, idx) => (
+                                <div key={idx} className="flex flex-col items-center bg-gray-50 px-2">
+                                    <div className="w-8 h-8 rounded-full bg-white border-2 border-brand-500 text-brand-600 text-sm font-bold flex items-center justify-center shadow-sm mb-2">
+                                        {step.num}
+                                    </div>
+                                    <span className="text-xs font-semibold text-gray-500 whitespace-nowrap">{step.label}</span>
+                                </div>
+                            ))}
+                        </motion.div>
+
+                    </div>
+
+                    {/* RIGHT COLUMN: Medical Illustration Placeholder */}
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, delay: 0.2 }}
+                        className="lg:col-span-6 xl:col-span-7 hidden lg:block"
+                    >
+                        {/* SVG Illustration Placeholder that fits the theme */}
+                        <div className="relative w-full aspect-square max-w-[600px] ml-auto">
+                            {/* Abstract Medical Theme Blob Backgrounds */}
+                            <div className="absolute inset-0 bg-gradient-to-tr from-brand-100 to-violet-50 rounded-[3rem] transform rotate-3 scale-105 opacity-70"></div>
+                            <div className="absolute inset-0 bg-white shadow-xl shadow-brand-900/5 rounded-[3rem] overflow-hidden border border-gray-100 flex items-center justify-center p-12">
+
+                                <svg viewBox="0 0 400 400" className="w-full h-full text-brand-500" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    {/* Stylized Document */}
+                                    <rect x="100" y="60" width="200" height="280" rx="16" fill="white" stroke="currentColor" strokeWidth="8" />
+                                    <path d="M140 120H260" stroke="currentColor" strokeWidth="8" strokeLinecap="round" />
+                                    <path d="M140 160H220" stroke="currentColor" strokeWidth="8" strokeLinecap="round" />
+
+                                    {/* Stylized Checkmarks / Badges popping out */}
+                                    <circle cx="280" cy="180" r="40" fill="#E0E7FF" stroke="currentColor" strokeWidth="8" />
+                                    <path d="M265 180L275 190L295 170" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+
+                                    <circle cx="120" cy="240" r="30" fill="#FEF3C7" stroke="#F59E0B" strokeWidth="8" />
+                                    <path d="M120 225V245M120 255H120.01" stroke="#F59E0B" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+
+                                    {/* Sparkles / Scanning line */}
+                                    <line x1="60" y1="140" x2="340" y2="140" stroke="#3B82F6" strokeWidth="4" strokeDasharray="8 8" className="opacity-50" />
+
+                                    <path d="M160 210H260" stroke="#93C5FD" strokeWidth="8" strokeLinecap="round" />
+                                    <path d="M160 250H240" stroke="#93C5FD" strokeWidth="8" strokeLinecap="round" />
+                                    <path d="M160 290H200" stroke="#93C5FD" strokeWidth="8" strokeLinecap="round" />
+                                </svg>
+
+                                {/* Floating decorative UI blocks */}
+                                <div className="absolute top-10 left-8 bg-white p-3 rounded-xl shadow-lg border border-gray-100 flex items-center gap-3 animate-pulse">
+                                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center"><FileText size={16} className="text-blue-600" /></div>
+                                    <div className="h-2 w-16 bg-gray-200 rounded-full"></div>
+                                </div>
+                                <div className="absolute bottom-20 right-8 bg-white p-3 rounded-xl shadow-lg border border-gray-100 flex items-center gap-3" style={{ animation: 'pulse 3s infinite reverse' }}>
+                                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center"><CheckCircle2 size={16} className="text-green-600" /></div>
+                                    <div className="h-2 w-12 bg-gray-200 rounded-full"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                </main>
+            </div>
+
+            {/* Modals */}
             <AnimatePresence>
-                {showCamera && (
+                {/* 1. Camera Modal */}
+                {activeModal === 'camera' && (
                     <CameraCapture
-                        onCapture={(imgData) => {
-                            setShowCamera(false);
-                            handleProcess(imgData, 'camera');
-                        }}
-                        onClose={() => setShowCamera(false)}
+                        onCapture={handleCameraCapture}
+                        onClose={closeModal}
                     />
                 )}
+
+                {/* 2. Paste Text Modal */}
+                {activeModal === 'paste' && (
+                    <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm"
+                        role="dialog" aria-modal="true" aria-labelledby="paste-modal-title"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+                            className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+                            style={{ maxHeight: 'calc(100vh - 2rem)' }} // Account for padding
+                        >
+                            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                                        <Type size={20} />
+                                    </div>
+                                    <h2 id="paste-modal-title" className="text-xl font-bold text-gray-900">Paste document text</h2>
+                                </div>
+                                <button
+                                    onClick={closeModal}
+                                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors focus:outline-none focus:ring-4 focus:ring-gray-200"
+                                    aria-label="Close modal"
+                                >
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            <form onSubmit={handlePasteSubmit} className="flex flex-col flex-1 p-6 overflow-hidden">
+                                <p className="text-gray-600 mb-4 text-sm">
+                                    Copy text from your patient portal, chart, or digital records and paste it below. Don't worry about formatting.
+                                </p>
+                                <textarea
+                                    value={pastedText}
+                                    onChange={(e) => setPastedText(e.target.value)}
+                                    placeholder="Paste medical text here..."
+                                    className="w-full h-48 sm:h-64 flex-1 p-4 border border-gray-200 rounded-xl focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20 resize-none text-gray-700 text-lg leading-relaxed placeholder:text-gray-400"
+                                    aria-label="Text to simplify"
+                                />
+                                <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={closeModal}
+                                        className="px-6 py-3 min-h-[48px] text-gray-700 font-bold bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors focus:ring-4 focus:ring-gray-200"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={pastedText.trim().length < 10}
+                                        className="px-8 py-3 min-h-[48px] bg-brand-600 text-white font-bold rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:ring-4 focus:ring-brand-500/50 shadow-md flex justify-center items-center"
+                                    >
+                                        Simplify text
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </motion.div>
+                )}
             </AnimatePresence>
-
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full max-w-lg text-center space-y-8"
-            >
-                <div className="space-y-4">
-                    <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 tracking-tight">
-                        Understand your <span className="text-brand-600">health</span>.
-                    </h1>
-                    <p className="text-lg text-gray-600 max-w-md mx-auto">
-                        Scan any medical document to get a plain-language summary, action items, and safety alerts.
-                    </p>
-                </div>
-
-                {/* Hidden File Input */}
-                <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    className="hidden"
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                />
-
-                <AnimatePresence mode="wait">
-                    {showTextPaste ? (
-                        <motion.div
-                            key="paste-form"
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 text-left"
-                        >
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="font-bold text-lg text-gray-900">Paste Document Text</h3>
-                                <button
-                                    onClick={() => setShowTextPaste(false)}
-                                    className="p-2 text-gray-400 hover:text-gray-900 rounded-lg transition-colors"
-                                >
-                                    <X size={20} />
-                                </button>
-                            </div>
-                            <textarea
-                                value={pastedText}
-                                onChange={(e) => setPastedText(e.target.value)}
-                                placeholder="Paste your medical instructions, discharge summary, or lab results here..."
-                                className="w-full h-48 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-brand-500/20 focus:border-brand-500 resize-none outline-none transition-all"
-                            ></textarea>
-                            <div className="mt-4 flex justify-end gap-3">
-                                <button
-                                    onClick={() => setShowTextPaste(false)}
-                                    className="px-5 py-2.5 font-medium text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleTextSubmit}
-                                    disabled={!pastedText.trim()}
-                                    className="px-6 py-2.5 bg-brand-600 text-white font-bold rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:hover:bg-brand-600 transition-colors flex items-center gap-2"
-                                >
-                                    Process <ArrowRight size={18} />
-                                </button>
-                            </div>
-                        </motion.div>
-                    ) : (
-                        <motion.div
-                            key="action-buttons"
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            className="grid grid-cols-1 gap-4 mt-8"
-                        >
-                            <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={() => setShowCamera(true)}
-                                className="flex items-center p-6 bg-brand-600 text-white rounded-2xl shadow-lg hover:bg-brand-700 transition-colors group focus:outline-none focus:ring-4 focus:ring-brand-500/50"
-                                aria-label="Scan your document with camera"
-                            >
-                                <div className="bg-white/20 p-4 rounded-xl mr-6 group-hover:scale-110 transition-transform">
-                                    <Camera size={32} />
-                                </div>
-                                <div className="text-left">
-                                    <span className="block text-xl font-semibold">Scan your document</span>
-                                    <span className="block text-brand-100 text-sm mt-1">Take a photo with your device camera</span>
-                                </div>
-                            </motion.button>
-
-                            <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={() => fileInputRef.current?.click()}
-                                className="flex items-center p-6 bg-white border-2 border-gray-200 text-gray-800 rounded-2xl shadow-sm hover:border-brand-500 hover:bg-brand-50 transition-colors group focus:outline-none focus:ring-4 focus:ring-brand-500/50"
-                                aria-label="Upload a file or image"
-                            >
-                                <div className="bg-gray-100 text-gray-600 group-hover:bg-brand-100 group-hover:text-brand-600 p-4 rounded-xl mr-6 transition-colors">
-                                    <FileUp size={32} />
-                                </div>
-                                <div className="text-left">
-                                    <span className="block text-xl font-semibold">Upload file</span>
-                                    <span className="block text-gray-500 text-sm mt-1">Select an image or PDF from your device</span>
-                                </div>
-                            </motion.button>
-
-                            <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={() => setShowTextPaste(true)}
-                                className="flex items-center p-6 bg-white border-2 border-gray-200 text-gray-800 rounded-2xl shadow-sm hover:border-brand-500 hover:bg-brand-50 transition-colors group focus:outline-none focus:ring-4 focus:ring-brand-500/50"
-                                aria-label="Paste text directly"
-                            >
-                                <div className="bg-gray-100 text-gray-600 group-hover:bg-brand-100 group-hover:text-brand-600 p-4 rounded-xl mr-6 transition-colors">
-                                    <Type size={32} />
-                                </div>
-                                <div className="text-left">
-                                    <span className="block text-xl font-semibold">Paste text</span>
-                                    <span className="block text-gray-500 text-sm mt-1">Type or paste text directly</span>
-                                </div>
-                            </motion.button>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </motion.div>
         </div>
     );
 }
