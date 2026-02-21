@@ -38,6 +38,8 @@ uvicorn app.main:app --reload --port 8000
 - `POST /api/pdf/export`
 - `GET /api/pdf/download/{documentId}`
 - `POST /api/tts/text`
+- `POST /api/tts/audio`
+- `GET /api/tts/download/{documentId}`
 
 ## Notes
 - OpenFDA integration is intentionally lightweight for hackathon speed.
