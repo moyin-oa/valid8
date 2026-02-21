@@ -21,7 +21,11 @@ async function extractText(imageFile) {
 // ============================================
 // Prompt builder
 // ============================================
-function buildPrompt(documentText, readingLevel = 'simple') {
+function buildPrompt(documentText, readingLevel = 'simple', language = 'English') {
+  const languageInstruction = language !== 'English' 
+    ? `\n\nIMPORTANT: Translate ALL output text into ${language}. Every field value (summary, medication purposes, diagnoses explanations, action items, warnings, disclaimer) must be written in ${language}. Keep medication names in their original English/medical form.`
+    : '';
+
   return `You are a medical document translator designed to help patients understand their healthcare documents.
 
 Given the following medical document text, return a JSON object with:
@@ -48,6 +52,7 @@ Reading levels:
 - "simple" = 5th grade, short sentences, no medical terms at all
 - "standard" = 8th grade, some medical terms with definitions in parentheses
 - "detailed" = 12th grade, preserves more clinical detail with explanations
+${languageInstruction}
 
 Return ONLY valid JSON. No markdown fences, no explanation outside the JSON.
 
@@ -181,13 +186,13 @@ async function callOpenAI(prompt, apiKey) {
   return JSON.parse(clean);
 }
 
-async function processDocument(rawText, readingLevel = 'simple') {
+async function processDocument(rawText, readingLevel = 'simple', language = 'English') {
   if (MOCK_MODE) {
     console.log('[MOCK MODE] Returning mock response — set MOCK_MODE = false to use real API');
     return getMockResponse(readingLevel);
   }
 
-  const prompt = buildPrompt(rawText, readingLevel);
+  const prompt = buildPrompt(rawText, readingLevel, language);
 
   // Try Gemini first, then OpenAI
   const geminiKey = getGeminiKey();
@@ -206,7 +211,7 @@ async function processDocument(rawText, readingLevel = 'simple') {
 // ============================================
 // Main entry point — full pipeline
 // ============================================
-async function analyzeMedicalDocument(input, readingLevel = 'simple') {
+async function analyzeMedicalDocument(input, readingLevel = 'simple', language = 'English') {
   let rawText;
   let ocrConfidence = null;
   let ocrWarning = null;
@@ -231,13 +236,14 @@ async function analyzeMedicalDocument(input, readingLevel = 'simple') {
     return { error: 'empty_text', message: 'No text found in document.' };
   }
 
-  const analysis = await processDocument(rawText, readingLevel);
+  const analysis = await processDocument(rawText, readingLevel, language);
 
   return {
     rawText,
     ocrConfidence,
     ocrWarning,
     readingLevel,
+    language,
     ...analysis
   };
 }
