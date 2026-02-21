@@ -232,4 +232,10 @@ async function analyzeMedicalDocument(input, readingLevel = 'simple') {
   };
 }
 
-export { extractText, processDocument, analyzeMedicalDocument };
+export { extractText, processDocument, analyzeMedicalDocument, extractMedicationNames };
+
+// Utility for Person 3 — extracts medication names for OpenFDA lookup
+function extractMedicationNames(analysisResult) {
+  if (!analysisResult?.medications) return [];
+  return analysisResult.medications.map(med => med.name);
+}
