@@ -21,16 +21,19 @@ async function extractText(imageFile) {
 // ============================================
 // Prompt builder
 // ============================================
-function buildPrompt(documentText, readingLevel = 'simple', language = 'English') {
+function buildPrompt(documentText, language = 'English') {
   const languageInstruction = language !== 'English' 
-    ? `\n\nIMPORTANT: Translate ALL output text into ${language}. Every field value (summary, medication purposes, diagnoses explanations, action items, warnings, disclaimer) must be written in ${language}. Keep medication names in their original English/medical form.`
+    ? `\n\nIMPORTANT: Translate ALL output text into ${language}. Every field value (summaries, medication purposes, diagnoses explanations, action items, warnings, disclaimer) must be written in ${language}. Keep medication names in their original English/medical form.`
     : '';
 
   return `You are a medical document translator designed to help patients understand their healthcare documents.
 
 Given the following medical document text, return a JSON object with:
 
-1. "summary": A plain-language explanation of what this document says, written at a ${readingLevel} reading level.
+1. "summary": An OBJECT with three keys, each a plain-language explanation at a different reading level:
+   - "simple": 5th grade reading level — short sentences, no medical terms at all
+   - "standard": 8th grade reading level — some medical terms with definitions in parentheses
+   - "detailed": 12th grade reading level — preserves more clinical detail with explanations
 2. "medications": An array of objects, each with:
    - "name": medication name
    - "dosage": dosage as written
@@ -47,11 +50,6 @@ Given the following medical document text, return a JSON object with:
 
 If the document does not appear to be a medical document, return:
 {"error": "not_medical", "message": "This does not appear to be a medical document."}
-
-Reading levels:
-- "simple" = 5th grade, short sentences, no medical terms at all
-- "standard" = 8th grade, some medical terms with definitions in parentheses
-- "detailed" = 12th grade, preserves more clinical detail with explanations
 ${languageInstruction}
 
 Return ONLY valid JSON. No markdown fences, no explanation outside the JSON.
@@ -120,6 +118,11 @@ function getGeminiKey() {
 }
 
 function getOpenAIKey() {
+  // Browser (Vite)
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_OPENAI_API_KEY) {
+    return import.meta.env.VITE_OPENAI_API_KEY;
+  }
+  // Node.js
   if (typeof process !== 'undefined' && process.env?.OPENAI_API_KEY) {
     return process.env.OPENAI_API_KEY;
   }
@@ -186,13 +189,13 @@ async function callOpenAI(prompt, apiKey) {
   return JSON.parse(clean);
 }
 
-async function processDocument(rawText, readingLevel = 'simple', language = 'English') {
+async function processDocument(rawText, language = 'English') {
   if (MOCK_MODE) {
     console.log('[MOCK MODE] Returning mock response — set MOCK_MODE = false to use real API');
-    return getMockResponse(readingLevel);
+    return getMockResponse('simple');
   }
 
-  const prompt = buildPrompt(rawText, readingLevel, language);
+  const prompt = buildPrompt(rawText, language);
 
   // Try Gemini first, then OpenAI
   const geminiKey = getGeminiKey();
@@ -211,7 +214,7 @@ async function processDocument(rawText, readingLevel = 'simple', language = 'Eng
 // ============================================
 // Main entry point — full pipeline
 // ============================================
-async function analyzeMedicalDocument(input, readingLevel = 'simple', language = 'English') {
+async function analyzeMedicalDocument(input, language = 'English') {
   let rawText;
   let ocrConfidence = null;
   let ocrWarning = null;
@@ -236,13 +239,12 @@ async function analyzeMedicalDocument(input, readingLevel = 'simple', language =
     return { error: 'empty_text', message: 'No text found in document.' };
   }
 
-  const analysis = await processDocument(rawText, readingLevel, language);
+  const analysis = await processDocument(rawText, language);
 
   return {
     rawText,
     ocrConfidence,
     ocrWarning,
-    readingLevel,
     language,
     ...analysis
   };
