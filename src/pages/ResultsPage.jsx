@@ -1,26 +1,47 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Volume2, Download, AlertTriangle, CheckSquare, FileText, ChevronDown, Pill } from 'lucide-react';
-import mockData from '../data/mock_contract.json';
+import { ArrowLeft, Volume2, Download, AlertTriangle, CheckSquare, FileText, ChevronDown, Pill, Globe } from 'lucide-react';
+import { useDocumentContext } from '../context/DocumentContext';
+import { useDocumentAnalysis } from '../hooks/useDocumentAnalysis';
 import { useReactToPrint } from 'react-to-print';
 
 export default function ResultsPage() {
     const navigate = useNavigate();
+    const { analysisResult: data, drugInteractions } = useDocumentContext();
+    const { reAnalyze } = useDocumentAnalysis();
     const [activeTab, setActiveTab] = useState('summary');
-    const [readingLevel, setReadingLevel] = useState('standard');
+    const [readingLevel, setReadingLevel] = useState('simple');
+    const [language, setLanguage] = useState('English');
     const [isPlaying, setIsPlaying] = useState(false);
 
     // Reference for the PDF print area
     const contentRef = useRef(null);
 
+    // Redirect if no data
+    useEffect(() => {
+        if (!data) navigate('/');
+    }, [data, navigate]);
+
+    if (!data) return null;
+
+    const warningCount = (data.warnings?.length || 0) + (drugInteractions?.length || 0);
+
     const tabs = [
         { id: 'summary', label: 'Summary', icon: FileText },
         { id: 'actions', label: 'Action Items', icon: CheckSquare },
-        { id: 'alerts', label: `Alerts (${mockData.warnings.length})`, icon: AlertTriangle },
+        { id: 'alerts', label: `Alerts (${warningCount})`, icon: AlertTriangle },
     ];
 
     const handleLevelChange = (e) => setReadingLevel(e.target.value);
+
+    const handleLanguageChange = async (e) => {
+        const newLang = e.target.value;
+        setLanguage(newLang);
+        if (newLang !== language) {
+            await reAnalyze(newLang);
+        }
+    };
 
     const handleReadAloud = () => {
         if (isPlaying) {
@@ -31,21 +52,21 @@ export default function ResultsPage() {
 
         let textToRead = "";
         if (activeTab === 'summary') {
-            textToRead = mockData.summary[readingLevel];
+            // summary is now an object with simple/standard/detailed keys
+            textToRead = typeof data.summary === 'object' ? (data.summary[readingLevel] || data.summary.simple) : data.summary;
         } else if (activeTab === 'actions') {
-            textToRead = "Your Next Steps. " + mockData.action_items.map((item, i) => `${i + 1}: ${item}`).join(". ");
+            textToRead = "Your Next Steps. " + (data.action_items || []).map((item, i) => `${i + 1}: ${item}`).join(". ");
         } else if (activeTab === 'alerts') {
-            textToRead = "Safety Checks and Warnings. " + mockData.warnings.join(". ");
+            textToRead = "Safety Checks and Warnings. " + (data.warnings || []).join(". ");
         }
 
         const utterance = new SpeechSynthesisUtterance(textToRead);
 
-        // Specifically look for built-in high-quality feminine English voices
         const voices = window.speechSynthesis.getVoices();
         const feminineVoice = voices.find(voice =>
-            voice.name.includes('Zira') ||       // Windows Female
-            voice.name.includes('Samantha') ||   // Mac Female
-            voice.name.includes('Google US English') || // Chrome Female
+            voice.name.includes('Zira') ||
+            voice.name.includes('Samantha') ||
+            voice.name.includes('Google US English') ||
             voice.name.includes('Susan') ||
             (voice.name.includes('Female') && voice.lang.startsWith('en'))
         );
@@ -53,38 +74,32 @@ export default function ResultsPage() {
         if (feminineVoice) {
             utterance.voice = feminineVoice;
         } else {
-            // Fallback for English
             const englishVoice = voices.find(v => v.lang.startsWith('en'));
             if (englishVoice) utterance.voice = englishVoice;
         }
 
-        utterance.pitch = 1.1; // Slightly higher pitch for a more feminine/soothing tone
-        utterance.rate = 0.9;  // Slightly slower 
-
+        utterance.pitch = 1.1;
+        utterance.rate = 0.9;
         utterance.onend = () => setIsPlaying(false);
 
         setIsPlaying(true);
         window.speechSynthesis.speak(utterance);
     };
 
-    // Ensure voices are loaded (sometimes they load asynchronously)
     if (typeof window !== 'undefined' && window.speechSynthesis.onvoiceschanged !== undefined) {
         window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
     }
 
-    // Set up native printing for PDF generation
     const handleDownloadPdf = useReactToPrint({
         content: () => contentRef.current,
         documentTitle: 'MedLens_Summary',
-        onBeforePrint: () => console.log('Preparing PDF format...'),
-        onAfterPrint: () => console.log('Finished PDF printing.'),
         removeAfterPrint: true,
     });
 
     return (
         <div className="w-full pb-20">
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-4">
                 <button
                     onClick={() => navigate('/')}
                     className="p-3 -ml-3 text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-4 focus:ring-brand-500 rounded-xl transition-colors min-w-[48px] min-h-[48px] flex items-center justify-center"
@@ -114,6 +129,32 @@ export default function ResultsPage() {
                         <Download size={20} />
                     </button>
                 </div>
+            </div>
+
+            {/* OCR Warning */}
+            {data.ocrWarning && (
+                <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex gap-3 items-start">
+                    <AlertTriangle size={20} className="text-amber-500 mt-0.5 shrink-0" />
+                    <p className="text-amber-800 text-sm">{data.ocrWarning}</p>
+                </div>
+            )}
+
+            {/* Language selector */}
+            <div className="flex items-center gap-2 mb-6">
+                <Globe size={16} className="text-gray-400" />
+                <select
+                    value={language}
+                    onChange={handleLanguageChange}
+                    className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-4 focus:ring-brand-500/50 focus:border-brand-500 p-2 pr-8 min-h-[40px]"
+                    aria-label="Select language"
+                >
+                    <option value="English">English</option>
+                    <option value="Spanish">Español</option>
+                    <option value="French">Français</option>
+                    <option value="Chinese">中文</option>
+                    <option value="Korean">한국어</option>
+                    <option value="Vietnamese">Tiếng Việt</option>
+                </select>
             </div>
 
             {/* Tabs */}
@@ -160,10 +201,10 @@ export default function ResultsPage() {
                             transition={{ duration: 0.2 }}
                         >
                             {activeTab === 'summary' && (
-                                <SummaryTab data={mockData} readingLevel={readingLevel} onLevelChange={handleLevelChange} />
+                                <SummaryTab data={data} readingLevel={readingLevel} onLevelChange={handleLevelChange} />
                             )}
-                            {activeTab === 'actions' && <ActionsTab data={mockData} />}
-                            {activeTab === 'alerts' && <AlertsTab data={mockData} />}
+                            {activeTab === 'actions' && <ActionsTab data={data} />}
+                            {activeTab === 'alerts' && <AlertsTab data={data} drugInteractions={drugInteractions} />}
                         </motion.div>
                     </AnimatePresence>
                 </div>
@@ -173,9 +214,10 @@ export default function ResultsPage() {
 }
 
 function SummaryTab({ data, readingLevel, onLevelChange }) {
-    // Note: Since the JSON only has one 'summary' string right now, 
-    // we use that for all levels. In a real app, the API would return 
-    // different text based on the level requested.
+    // Handle summary as object {simple, standard, detailed} or as a plain string
+    const summaryText = typeof data.summary === 'object'
+        ? (data.summary[readingLevel] || data.summary.simple || '')
+        : (data.summary || '');
 
     return (
         <div className="space-y-6">
@@ -198,7 +240,7 @@ function SummaryTab({ data, readingLevel, onLevelChange }) {
 
             <div className="prose prose-brand max-w-none text-gray-700" aria-live="polite">
                 <p className="text-lg leading-relaxed mb-4">
-                    {data.summary[readingLevel]}
+                    {summaryText}
                 </p>
 
                 {data.diagnoses && data.diagnoses.length > 0 && (
@@ -214,6 +256,13 @@ function SummaryTab({ data, readingLevel, onLevelChange }) {
                     </div>
                 )}
             </div>
+
+            {/* Disclaimer */}
+            {data.disclaimer && (
+                <div className="mt-6 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <p className="text-xs text-gray-500 italic">{data.disclaimer}</p>
+                </div>
+            )}
         </div>
     );
 }
@@ -251,11 +300,33 @@ function ActionsTab({ data }) {
     );
 }
 
-function AlertsTab({ data }) {
+function AlertsTab({ data, drugInteractions = [] }) {
     return (
         <div className="space-y-6">
             <h3 className="text-xl font-bold text-gray-900 border-b border-gray-100 pb-4">Safety Checks</h3>
 
+            {/* Drug Interaction Warnings */}
+            {drugInteractions.length > 0 && (
+                <div className="space-y-3">
+                    <h4 className="font-bold text-red-900 flex items-center gap-2">
+                        <AlertTriangle size={18} className="text-red-500" />
+                        Drug Interaction Alerts
+                    </h4>
+                    {drugInteractions.map((item, i) => (
+                        <div key={i} className="p-5 bg-red-50 border border-red-200 rounded-xl relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-2 h-full bg-red-500"></div>
+                            <div className="flex gap-4 pl-2">
+                                <div>
+                                    <h5 className="text-lg font-bold text-red-900 mb-1">{item.drug}</h5>
+                                    <p className="text-red-800 text-sm">{item.details}</p>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* General Warnings */}
             {data.warnings && data.warnings.length > 0 ? (
                 data.warnings.map((warning, i) => (
                     <div key={i} className="p-5 bg-amber-50 border border-amber-200 rounded-xl relative overflow-hidden mb-4">
