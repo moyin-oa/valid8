@@ -1,19 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Volume2, Download, AlertTriangle, CheckSquare, FileText, ChevronDown, Pill, Globe } from 'lucide-react';
+import { ArrowLeft, Volume2, Download, AlertTriangle, CheckSquare, FileText, ChevronDown, Pill, Globe, Loader2 } from 'lucide-react';
 import { useDocumentContext } from '../context/DocumentContext';
-import { useDocumentAnalysis } from '../hooks/useDocumentAnalysis';
+import { analyzeMedicalDocument } from '../services/medlens-ai.js';
 import { useReactToPrint } from 'react-to-print';
 
 export default function ResultsPage() {
     const navigate = useNavigate();
-    const { analysisResult: data, drugInteractions } = useDocumentContext();
-    const { reAnalyze } = useDocumentAnalysis();
+    const { analysisResult: data, setAnalysisResult, drugInteractions } = useDocumentContext();
     const [activeTab, setActiveTab] = useState('summary');
     const [readingLevel, setReadingLevel] = useState('simple');
     const [language, setLanguage] = useState('English');
     const [isPlaying, setIsPlaying] = useState(false);
+    const [translating, setTranslating] = useState(false);
 
     // Reference for the PDF print area
     const contentRef = useRef(null);
@@ -38,8 +38,17 @@ export default function ResultsPage() {
     const handleLanguageChange = async (e) => {
         const newLang = e.target.value;
         setLanguage(newLang);
-        if (newLang !== language) {
-            await reAnalyze(newLang);
+        if (newLang !== language && data?.rawText) {
+            setTranslating(true);
+            try {
+                const newResult = await analyzeMedicalDocument(data.rawText, newLang);
+                if (!newResult.error) {
+                    setAnalysisResult(newResult);
+                }
+            } catch (err) {
+                console.error('Translation failed:', err);
+            }
+            setTranslating(false);
         }
     };
 
@@ -145,7 +154,8 @@ export default function ResultsPage() {
                 <select
                     value={language}
                     onChange={handleLanguageChange}
-                    className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-4 focus:ring-brand-500/50 focus:border-brand-500 p-2 pr-8 min-h-[40px]"
+                    disabled={translating}
+                    className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-4 focus:ring-brand-500/50 focus:border-brand-500 p-2 pr-8 min-h-[40px] disabled:opacity-50"
                     aria-label="Select language"
                 >
                     <option value="English">English</option>
@@ -155,6 +165,12 @@ export default function ResultsPage() {
                     <option value="Korean">한국어</option>
                     <option value="Vietnamese">Tiếng Việt</option>
                 </select>
+                {translating && (
+                    <div className="flex items-center gap-2 text-sm text-brand-600">
+                        <Loader2 size={16} className="animate-spin" />
+                        <span>Translating...</span>
+                    </div>
+                )}
             </div>
 
             {/* Tabs */}
