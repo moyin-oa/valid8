@@ -64,14 +64,13 @@ ${documentText}`;
 // ============================================
 const MOCK_MODE = false;
 
-function getMockResponse(readingLevel) {
-  const summaries = {
-    simple: "You were seen for diabetes and high blood pressure. You need to take three medicines and see your doctor again in two weeks.",
-    standard: "You were discharged with diagnoses of Type 2 Diabetes Mellitus and Hypertension. Three medications were prescribed, and a follow-up appointment is scheduled.",
-    detailed: "This discharge summary documents treatment for Type 2 Diabetes Mellitus and Hypertension. A regimen of Metformin (500mg BID), Lisinopril (10mg daily), and low-dose Aspirin (81mg daily) was prescribed, with follow-up in 2 weeks."
-  };
+function getMockResponse() {
   return {
-    summary: summaries[readingLevel] || summaries.simple,
+    summary: {
+      simple: "You were seen for diabetes and high blood pressure. You need to take three medicines and see your doctor again in two weeks.",
+      standard: "You were discharged with diagnoses of Type 2 Diabetes Mellitus and Hypertension. Three medications were prescribed, and a follow-up appointment is scheduled.",
+      detailed: "This discharge summary documents treatment for Type 2 Diabetes Mellitus and Hypertension. A regimen of Metformin (500mg BID), Lisinopril (10mg daily), and low-dose Aspirin (81mg daily) was prescribed, with follow-up in 2 weeks."
+    },
     medications: [
       { name: "Metformin", dosage: "500mg", frequency: "twice a day with meals", purpose: "Helps control blood sugar levels", warnings: "May cause stomach upset" },
       { name: "Lisinopril", dosage: "10mg", frequency: "once daily", purpose: "Lowers blood pressure", warnings: "May cause dizziness" },
