@@ -25,9 +25,11 @@ async function checkDrugInteractions(medicationNames) {
       const interactionText = data?.results?.[0]?.drug_interactions?.[0];
 
       if (interactionText) {
+        // Summarize the raw FDA text into a plain-language warning
+        const summary = await summarizeInteraction(drugName, interactionText, medicationNames);
         interactions.push({
           drug: drugName,
-          details: interactionText.slice(0, 500) // truncate long FDA text
+          details: summary
         });
       }
     } catch (err) {
@@ -36,6 +38,52 @@ async function checkDrugInteractions(medicationNames) {
   }
 
   return interactions;
+}
+
+async function summarizeInteraction(drugName, rawFdaText, allMedications) {
+  // Try to use the LLM to summarize, fall back to truncated raw text
+  try {
+    const { processDocument } = await import('../services/medlens-ai.js');
+
+    // Build a focused prompt - not using processDocument directly, calling LLM manually
+    const getKey = () => {
+      if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_OPENAI_API_KEY) {
+        return import.meta.env.VITE_OPENAI_API_KEY;
+      }
+      return null;
+    };
+
+    const apiKey = getKey();
+    if (!apiKey) return rawFdaText.slice(0, 300) + '...';
+
+    const prompt = `Summarize the following drug interaction information for ${drugName} in 1-2 simple sentences that a patient can understand. Focus only on interactions relevant to these medications the patient is taking: ${allMedications.join(', ')}. If none of the listed medications are mentioned in the interaction text, say "No specific interactions found with your other medications, but consult your doctor."
+
+FDA TEXT:
+${rawFdaText.slice(0, 1500)}
+
+Return ONLY the plain-language summary, no JSON, no formatting.`;
+
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.2,
+        max_tokens: 200
+      })
+    });
+
+    if (!resp.ok) return rawFdaText.slice(0, 300) + '...';
+
+    const data = await resp.json();
+    return data?.choices?.[0]?.message?.content?.trim() || rawFdaText.slice(0, 300) + '...';
+  } catch {
+    return rawFdaText.slice(0, 300) + '...';
+  }
 }
 
 // ============================================
