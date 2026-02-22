@@ -3,7 +3,7 @@
 // Person 1: import this hook and call it from the results page
 
 import { useState } from 'react';
-import { analyzeMedicalDocument, extractMedicationNames } from './medlens-ai.js';
+import { analyzeMedicalDocument, extractMedicationNames } from '../services/medlens-ai.js';
 
 // ============================================
 // Person 3's drug interaction lookup
