@@ -3,15 +3,41 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, FileUp, Type, X, FileText, CheckCircle2, ShieldAlert, ArrowRight, ShieldCheck, PlayCircle } from 'lucide-react';
 import CameraCapture from '../components/CameraCapture';
+import { useDocumentContext } from '../context/DocumentContext';
 
 export default function LandingPage() {
     const navigate = useNavigate();
+    const { setDocumentInput, setInputType, clearAll } = useDocumentContext();
     const [activeModal, setActiveModal] = useState(null); // 'camera', 'upload', 'paste'
     const [pastedText, setPastedText] = useState('');
     const fileInputRef = useRef(null);
 
+    // Clear previous results when landing page mounts
+    useEffect(() => { clearAll(); }, []);
+
+    // --- Demo sample text ---
+    const DEMO_TEXT = `DISCHARGE SUMMARY
+Patient: John Doe, DOB: 03/15/1965
+Date of Discharge: 02/21/2026
+Diagnosis: Type 2 Diabetes Mellitus, Hypertension
+
+Medications:
+- Metformin 500mg PO BID with meals
+- Lisinopril 10mg PO daily
+- Aspirin 81mg PO daily
+
+Instructions:
+- Monitor blood glucose levels daily before breakfast
+- Follow up with Dr. Williams in 2 weeks
+- Low sodium diet recommended
+- Return to ER if experiencing chest pain, severe headache, or blood glucose >400mg/dL
+
+Follow-up: Dr. Williams, March 7, 2026 at 10:00 AM`;
+
     // --- Handlers ---
     const handleCameraCapture = (imageBlob) => {
+        setDocumentInput(imageBlob);
+        setInputType('camera');
         closeModal();
         navigate('/processing');
     };
@@ -23,6 +49,8 @@ export default function LandingPage() {
     const handleFileChange = (e) => {
         const file = e.target.files?.[0];
         if (file) {
+            setDocumentInput(file);
+            setInputType('upload');
             navigate('/processing');
         }
     };
@@ -30,13 +58,17 @@ export default function LandingPage() {
     const handlePasteSubmit = (e) => {
         e.preventDefault();
         if (pastedText.trim().length > 10) {
+            setDocumentInput(pastedText.trim());
+            setInputType('paste');
             closeModal();
             navigate('/processing');
         }
     };
 
     const handleTryDemo = () => {
-        navigate('/processing'); // Using processing to simulate the flow
+        setDocumentInput(DEMO_TEXT);
+        setInputType('demo');
+        navigate('/processing');
     };
 
     const closeModal = () => {
